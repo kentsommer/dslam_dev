@@ -1,0 +1,8 @@
+prefix=/opt/dslam/devel
+
+Name: dslam_bag
+Description: Description of dslam_bag
+Version: 0.0.0
+Cflags: 
+Libs: -L/opt/dslam/devel/lib 
+Requires: 

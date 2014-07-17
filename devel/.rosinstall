@@ -1,0 +1,2 @@
+- setup-file:
+    local-name: /opt/dslam/devel/setup.sh
