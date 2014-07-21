@@ -28,8 +28,11 @@ parser.add_argument('-d', '--dump', default=False, action='store_true', help='du
 parser.add_argument('-f', '--fps', default=False, action='store_true', help='show fps etched on the image windows.')
 parser.add_argument('-o', '--output-dir', action='store', default='./', help='default image storage location.')
 parser.add_argument('-r', '--read', default=False, action='store_true', help='read from image store instead of stereo pairs.')
+parser.add_argument('-4', '--ip4', default=False, action='store_true', help='Use camera on IP 4')
+parser.add_argument('-3', '--ip3', default=False, action='store_true', help='Use camera on IP 3')
 # add ecto scheduler args
 scheduler_options(parser)
+#myargs = rospy.myargv(argv=sys.argv)
 options = parser.parse_args()
 
 ##############################################################################
@@ -37,11 +40,18 @@ options = parser.parse_args()
 ##############################################################################
 
 if not options.read:
-    image_source = image_bridge.ImageClient('image_source', ip='192.168.1.3', port=5555)
-    bit_bucket = vision_utils.BitBucket('bit_bucket', verbose=False)
+    image_source4 = image_bridge.ImageClient('image_source', ip='192.168.1.4', port=5555)
+    image_source3 = image_bridge.ImageClient('image_source', ip='192.168.1.3', port=5555)
+    bit_bucket4 = vision_utils.BitBucket('bit_bucket', verbose=False)
+    bit_bucket3 = vision_utils.BitBucket('bit_bucket', verbose=False)
 if options.fps:
-    fps_left = FPSDrawer()
-    fps_right = FPSDrawer()
+    if options.ip3:
+        fps_left3 = FPSDrawer()
+        fps_right3 = FPSDrawer()
+    if options.ip4:
+        fps_left4 = FPSDrawer()
+        fps_right4 = FPSDrawer()
+
 
 if options.average:
     average = vision_utils.AveragePair('average', window_size = 100)
@@ -55,8 +65,10 @@ if options.average:
     save_image_right = ecto.If('save_image_right', cell=ImageSaver('save_image_right', filename_format=right_image_filename, start=1))
 
 # Raw image display
-imshow_left = imshow('show_raw_left', name='raw_left')
-imshow_right = imshow('show_raw_right', name='raw_right')
+imshow_left4 = imshow('show_raw_left', name='raw_left4')
+imshow_right4 = imshow('show_raw_right', name='raw_right4')
+imshow_left3 = imshow('show_raw_left', name='raw_left3')
+imshow_right3 = imshow('show_raw_right', name='raw_right3')
 
 # Slowed image display for reading from file system instead of board
 imshow_sleft = imshow(name='13ms wait raw left', waitKey=13)
@@ -76,14 +88,17 @@ if options.read:
     load_right = ImageReader(path=options.output_dir, match="^.*right.*\\.bmp$", loop=False)
 
 # Converters
-mat2ImgMsgLeft = Mat2Image()
-mat2ImgMsgRight = Mat2Image()
+mat2ImgMsgLeft4 = Mat2Image()
+mat2ImgMsgRight4 = Mat2Image()
+mat2ImgMsgLeft3 = Mat2Image()
+mat2ImgMsgRight3 = Mat2Image()
 
-# Publisher and Subscriber
+# Publisher
 ImagePub = ecto_sensor_msgs.Publisher_Image
-ImageSub = ecto_sensor_msgs.Subscriber_Image
-pub_imageLeft = ImagePub("image_publisher", topic_name='/image_left')
-pub_imageRight = ImagePub("image_publisher", topic_name='/image_right')
+pub_imageLeft3 = ImagePub("image_publisher", topic_name='/image_left3')
+pub_imageRight3 = ImagePub("image_publisher", topic_name='/image_right3')
+pub_imageLeft4 = ImagePub("image_publisher", topic_name='/image_left4')
+pub_imageRight4 = ImagePub("image_publisher", topic_name='/image_right4')
 
 ##############################################################################
 # Graph
@@ -92,29 +107,56 @@ pub_imageRight = ImagePub("image_publisher", topic_name='/image_right')
 graph = []  # graph cannot be empty!
 
 if options.fps:
-    graph += [
-        image_source['left']  >> fps_left['image'],
-        image_source['right'] >> fps_right['image'],
-        fps_left['image']  >> imshow_left['image'],
-        fps_right['image'] >> imshow_right['image'],
-    ]
+    if options.ip3:    
+        graph += [
+            image_source3['left']  >> fps_left3['image'],
+            image_source3['right'] >> fps_right3['image'],
+            fps_left3['image']  >> imshow_left3['image'],
+            fps_right3['image'] >> imshow_right3['image'],
+        ]
+    if options.ip4:
+        graph += [
+            image_source4['left']  >> fps_left4['image'],
+            image_source4['right'] >> fps_right4['image'],
+            fps_left4['image']  >> imshow_left4['image'],
+            fps_right4['image'] >> imshow_right4['image'],
+         ]
 
 if options.average:
-    graph += [
-        image_source['pair'] >> average['pair'],
-        average['left']  >> imshow_left_average['image'],
-        average['right'] >> imshow_right_average['image'],
-        imshow_left_average['save'] >> save_image_left['__test__'],
-        imshow_left_average['save'] >> save_image_right['__test__'],  # can only have one imshow source of triggers for 's' and then it works worldwide.
-        average['left'] >> save_image_left['image'],
-        average['right'] >> save_image_right['image'],
-    ]
+    if options.ip3:
+        graph += [
+            image_source3['pair'] >> average['pair'],
+            average['left']  >> imshow_left_average['image'],
+            average['right'] >> imshow_right_average['image'],
+            imshow_left_average['save'] >> save_image_left['__test__'],
+            imshow_left_average['save'] >> save_image_right['__test__'],  # can only have one imshow source of triggers for 's' and then it works worldwide.
+            average['left'] >> save_image_left['image'],
+            average['right'] >> save_image_right['image'],
+        ]
+    if options.ip4:
+        graph += [
+             image_source4['pair'] >> average['pair'],
+             average['left']  >> imshow_left_average['image'],
+             average['right'] >> imshow_right_average['image'],
+             imshow_left_average['save'] >> save_image_left['__test__'],
+             imshow_left_average['save'] >> save_image_right['__test__'],  # can only have one imshow source of triggers for 's' and then it works worldwide.
+             average['left'] >> save_image_left['image'],
+             average['right'] >> save_image_right['image'],
+         ]
+
 
 if options.dump:
-    graph += [
-        image_source['left']  >> save_left['image'],
-        image_source['right'] >> save_right['image'],
-    ]
+    if options.ip3:
+        graph += [
+            image_source3['left']  >> save_left['image'],
+            image_source3['right'] >> save_right['image'],
+        ]
+    if options.ip4:
+        graph += [
+             image_source4['left']  >> save_left['image'],
+             image_source4['right'] >> save_right['image'],
+         ]
+
 
 if options.dump and options.average:
      graph += [
@@ -130,21 +172,35 @@ if options.read:
     ]
 
 if options.bag:
-    graph += [
-	image_source['left']  >> imshow_left['image'],
-        image_source['right'] >> imshow_right['image'],
-        image_source['left'] >> mat2ImgMsgLeft['image'],
-        image_source['right'] >> mat2ImgMsgRight['image'],
-        mat2ImgMsgLeft['image']  >> pub_imageLeft['input'],
-        mat2ImgMsgRight['image'] >> pub_imageRight['input'],
-	subprocess.Popen("rosbag record -q /odom /image_left /image_right", shell=True)
-    ]
-#else:
-#    graph += [
-#        image_source['counter'] >> bit_bucket['counter'],
-#        image_source['left']  >> imshow_left['image'],
-#        image_source['right'] >> imshow_right['image'],
-#    ]
+    if options.ip4:
+        graph += [
+            image_source4['left'] >> mat2ImgMsgLeft4['image'],
+            image_source4['right'] >> mat2ImgMsgRight4['image'],
+            mat2ImgMsgLeft4['image']  >> pub_imageLeft4['input'],
+            mat2ImgMsgRight4['image'] >> pub_imageRight4['input'],
+        ]
+    if options.ip3:
+        graph += [
+            image_source3['left'] >> mat2ImgMsgLeft3['image'],
+            image_source3['right'] >> mat2ImgMsgRight3['image'],
+            mat2ImgMsgLeft3['image']  >> pub_imageLeft3['input'],
+            mat2ImgMsgRight3['image'] >> pub_imageRight3['input'],
+        ]
+    subprocess.Popen("rosbag record -q /odom /image_left3 /image_right3 /image_left4 /image_right4 /tf", shell=True)
+if not options.read and not options.bag and not options.fps:
+    if options.ip3:
+        graph += [
+            image_source3['counter'] >> bit_bucket3['counter'],
+            image_source3['left']  >> imshow_left3['image'],
+            image_source3['right'] >> imshow_right3['image'],
+        ]
+    if options.ip4:
+        graph += [
+            image_source4['counter'] >> bit_bucket4['counter'],
+            image_source4['left']  >> imshow_left4['image'],
+            image_source4['right'] >> imshow_right4['image'],
+         ]
+
 
 
 plasm = ecto.Plasm()
@@ -162,7 +218,12 @@ plasm.connect(graph)
 # Ros
 ##############################################################################
 
-ecto_ros.init(sys.argv, "dslam_ecto_bridge")
+if options.ip3 and options.ip4:
+    ecto_ros.init(sys.argv, "dslam_ecto_bridge")
+if options.ip3 and not options.ip4:
+    ecto_ros.init(sys.argv, "dslam_ecto_bridge3")
+if options.ip4 and not options.ip3:
+    ecto_ros.init(sys.argv, "dslam_ecto_bridge4")
 #rospy.init_node("dslam_ecto_bridge")
 
 ##############################################################################
