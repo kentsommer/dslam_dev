@@ -2,13 +2,12 @@
 
 import argparse
 import dslam_ecto_bridge.dslam_image_bridge as image_bridge
-import dslam_ecto_vision.dslam_vision_utils as vision_utils
+import dslam_bag.dslam_bag_vision_utils as vision_utils
 #import dslam_ecto_bridge.beachhead as beachhead
 import ecto
 from ecto.opts import scheduler_options, run_plasm
 from ecto_opencv.highgui import imshow, FPSDrawer, ImageSaver, ImageReader
 import ecto_ros, ecto_ros.ecto_sensor_msgs as ecto_sensor_msgs
-from ecto_ros import Mat2Image
 import os
 import rospy
 import sys
@@ -28,8 +27,8 @@ parser.add_argument('-d', '--dump', default=False, action='store_true', help='du
 parser.add_argument('-f', '--fps', default=False, action='store_true', help='show fps etched on the image windows.')
 parser.add_argument('-o', '--output-dir', action='store', default='./', help='default image storage location.')
 parser.add_argument('-r', '--read', default=False, action='store_true', help='read from image store instead of stereo pairs.')
-parser.add_argument('-4', '--ip4', default=False, action='store_true', help='Use camera on IP 4')
-parser.add_argument('-3', '--ip3', default=False, action='store_true', help='Use camera on IP 3')
+parser.add_argument('-front', '--frontcam', default=False, action='store_true', help='Use front camera')
+parser.add_argument('-back', '--backcam', default=False, action='store_true', help='Use back camera')
 # add ecto scheduler args
 scheduler_options(parser)
 #myargs = rospy.myargv(argv=sys.argv)
@@ -39,18 +38,18 @@ options = parser.parse_args()
 # Cells
 ##############################################################################
 
-if not options.read:
-    image_source4 = image_bridge.ImageClient('image_source', ip='192.168.1.4', port=5555)
-    image_source3 = image_bridge.ImageClient('image_source', ip='192.168.1.3', port=5555)
-    bit_bucket4 = vision_utils.BitBucket('bit_bucket', verbose=False)
-    bit_bucket3 = vision_utils.BitBucket('bit_bucket', verbose=False)
+if not options.read and (options.frontcam or options.backcam):
+    image_sourceBack = image_bridge.DSlamSource('image_source', ip='192.168.1.4', port=5555)
+    image_sourceFront = image_bridge.DSlamSource('image_source', ip='192.168.1.3', port=5555)
+    #bit_bucketBack = vision_utils.BitBucket('bit_bucket', verbose=False)
+    #bit_bucketFront = vision_utils.BitBucket('bit_bucket', verbose=False)
 if options.fps:
-    if options.ip3:
-        fps_left3 = FPSDrawer()
-        fps_right3 = FPSDrawer()
-    if options.ip4:
-        fps_left4 = FPSDrawer()
-        fps_right4 = FPSDrawer()
+    if options.frontcam:
+        fps_leftFront = FPSDrawer()
+        fps_rightFront = FPSDrawer()
+    if options.backcam:
+        fps_leftBack = FPSDrawer()
+        fps_rightBack = FPSDrawer()
 
 
 if options.average:
@@ -64,11 +63,12 @@ if options.average:
     save_image_left = ecto.If('save_image_left', cell=ImageSaver('save_image_left', filename_format=left_image_filename, start=1))
     save_image_right = ecto.If('save_image_right', cell=ImageSaver('save_image_right', filename_format=right_image_filename, start=1))
 
+
 # Raw image display
-imshow_left4 = imshow('show_raw_left', name='raw_left4')
-imshow_right4 = imshow('show_raw_right', name='raw_right4')
-imshow_left3 = imshow('show_raw_left', name='raw_left3')
-imshow_right3 = imshow('show_raw_right', name='raw_right3')
+imshow_leftBack = imshow('show_raw_left', name='raw_leftBack')
+imshow_rightBack = imshow('show_raw_right', name='raw_rightBack')
+imshow_leftFront = imshow('show_raw_left', name='raw_leftFront')
+imshow_rightFront = imshow('show_raw_right', name='raw_rightFront')
 
 # Slowed image display for reading from file system instead of board
 imshow_sleft = imshow(name='13ms wait raw left', waitKey=13)
@@ -88,17 +88,16 @@ if options.read:
     load_right = ImageReader(path=options.output_dir, match="^.*right.*\\.bmp$", loop=False)
 
 # Converters
-mat2ImgMsgLeft4 = Mat2Image()
-mat2ImgMsgRight4 = Mat2Image()
-mat2ImgMsgLeft3 = Mat2Image()
-mat2ImgMsgRight3 = Mat2Image()
-
+mat2ImgMsgLeftBack = vision_utils.Mat2ImageStamped()
+mat2ImgMsgRightBack = vision_utils.Mat2ImageStamped()
+mat2ImgMsgLeftFront = vision_utils.Mat2ImageStamped()
+mat2ImgMsgRightFront = vision_utils.Mat2ImageStamped()
 # Publisher
 ImagePub = ecto_sensor_msgs.Publisher_Image
-pub_imageLeft3 = ImagePub("image_publisher", topic_name='/image_left3')
-pub_imageRight3 = ImagePub("image_publisher", topic_name='/image_right3')
-pub_imageLeft4 = ImagePub("image_publisher", topic_name='/image_left4')
-pub_imageRight4 = ImagePub("image_publisher", topic_name='/image_right4')
+pub_imageLeftFront = ImagePub("image_publisher", topic_name='/image/front/left')
+pub_imageRightFront = ImagePub("image_publisher", topic_name='/image/front/right')
+pub_imageLeftBack = ImagePub("image_publisher", topic_name='/image/back/left')
+pub_imageRightBack = ImagePub("image_publisher", topic_name='/image/back/right')
 
 ##############################################################################
 # Graph
@@ -107,25 +106,25 @@ pub_imageRight4 = ImagePub("image_publisher", topic_name='/image_right4')
 graph = []  # graph cannot be empty!
 
 if options.fps:
-    if options.ip3:    
+    if options.frontcam:    
         graph += [
-            image_source3['left']  >> fps_left3['image'],
-            image_source3['right'] >> fps_right3['image'],
-            fps_left3['image']  >> imshow_left3['image'],
-            fps_right3['image'] >> imshow_right3['image'],
+            image_sourceFront['left']  >> fps_leftFront['image'],
+            image_sourceFront['right'] >> fps_rightFront['image'],
+            fps_leftFront['image']  >> imshow_leftFront['image'],
+            fps_rightFront['image'] >> imshow_rightFront['image'],
         ]
-    if options.ip4:
+    if options.backcam:
         graph += [
-            image_source4['left']  >> fps_left4['image'],
-            image_source4['right'] >> fps_right4['image'],
-            fps_left4['image']  >> imshow_left4['image'],
-            fps_right4['image'] >> imshow_right4['image'],
+            image_sourceBack['left']  >> fps_leftBack['image'],
+            image_sourceBack['right'] >> fps_rightBack['image'],
+            fps_leftBack['image']  >> imshow_leftBack['image'],
+            fps_rightBack['image'] >> imshow_rightBack['image'],
          ]
 
 if options.average:
-    if options.ip3:
+    if options.frontcam:
         graph += [
-            image_source3['pair'] >> average['pair'],
+            image_sourceFront['pair'] >> average['pair'],
             average['left']  >> imshow_left_average['image'],
             average['right'] >> imshow_right_average['image'],
             imshow_left_average['save'] >> save_image_left['__test__'],
@@ -133,9 +132,9 @@ if options.average:
             average['left'] >> save_image_left['image'],
             average['right'] >> save_image_right['image'],
         ]
-    if options.ip4:
+    if options.backcam:
         graph += [
-             image_source4['pair'] >> average['pair'],
+             image_sourceBack['pair'] >> average['pair'],
              average['left']  >> imshow_left_average['image'],
              average['right'] >> imshow_right_average['image'],
              imshow_left_average['save'] >> save_image_left['__test__'],
@@ -146,15 +145,15 @@ if options.average:
 
 
 if options.dump:
-    if options.ip3:
+    if options.frontcam:
         graph += [
-            image_source3['left']  >> save_left['image'],
-            image_source3['right'] >> save_right['image'],
+            image_sourceFront['left']  >> save_left['image'],
+            image_sourceFront['right'] >> save_right['image'],
         ]
-    if options.ip4:
+    if options.backcam:
         graph += [
-             image_source4['left']  >> save_left['image'],
-             image_source4['right'] >> save_right['image'],
+             image_sourceBack['left']  >> save_left['image'],
+             image_sourceBack['right'] >> save_right['image'],
          ]
 
 
@@ -172,36 +171,45 @@ if options.read:
     ]
 
 if options.bag:
-    if options.ip4:
+    if options.backcam:
         graph += [
-            image_source4['left'] >> mat2ImgMsgLeft4['image'],
-            image_source4['right'] >> mat2ImgMsgRight4['image'],
-            mat2ImgMsgLeft4['image']  >> pub_imageLeft4['input'],
-            mat2ImgMsgRight4['image'] >> pub_imageRight4['input'],
+            image_sourceBack['left'] >> mat2ImgMsgLeftBack['image'],
+            image_sourceBack['time'] >> mat2ImgMsgLeftBack['time'],
+            image_sourceBack['right'] >> mat2ImgMsgRightBack['image'],
+            image_sourceBack['time'] >> mat2ImgMsgRightBack['time'], 
+            mat2ImgMsgLeftBack['image']  >> pub_imageLeftBack['input'],
+            mat2ImgMsgRightBack['image'] >> pub_imageRightBack['input'],
         ]
-    if options.ip3:
+    if options.frontcam:
         graph += [
-            image_source3['left'] >> mat2ImgMsgLeft3['image'],
-            image_source3['right'] >> mat2ImgMsgRight3['image'],
-            mat2ImgMsgLeft3['image']  >> pub_imageLeft3['input'],
-            mat2ImgMsgRight3['image'] >> pub_imageRight3['input'],
+            image_sourceFront['left'] >> mat2ImgMsgLeftFront['image'],
+            image_sourceFront['time'] >> mat2ImgMsgLeftFront['time'],
+            image_sourceFront['right'] >> mat2ImgMsgRightFront['image'],
+            image_sourceFront['time'] >> mat2ImgMsgRightFront['time'],
+            mat2ImgMsgLeftFront['image']  >> pub_imageLeftFront['input'],
+            mat2ImgMsgRightFront['image'] >> pub_imageRightFront['input'],
         ]
-    subprocess.Popen("rosbag record -q /odom /image_left3 /image_right3 /image_left4 /image_right4 /tf", shell=True)
+    if options.frontcam and not options.backcam:
+        subprocess.Popen("rosbag record -q /odom /image/front/left /image/front/right /tf", shell=True)
+    if options.backcam and not options.frontcam:
+        subprocess.Popen("rosbag record -q /odom /image/back/left /image/back/right /tf", shell=True)
+    if options.frontcam and options.backcam:
+        subprocess.Popen("rosbag record -q /odom /image/front/left /image/front/right /image/back/left /image/back/right /tf", shell=True)
 if not options.read and not options.bag and not options.fps:
-    if options.ip3:
+    if options.frontcam:
         graph += [
-            image_source3['counter'] >> bit_bucket3['counter'],
-            image_source3['left']  >> imshow_left3['image'],
-            image_source3['right'] >> imshow_right3['image'],
+            #image_sourceFront['counter'] >> bit_bucketFront['counter'],
+            image_sourceFront['left']  >> imshow_leftFront['image'],
+            image_sourceFront['right'] >> imshow_rightFront['image'],
         ]
-    if options.ip4:
+    if options.backcam:
         graph += [
-            image_source4['counter'] >> bit_bucket4['counter'],
-            image_source4['left']  >> imshow_left4['image'],
-            image_source4['right'] >> imshow_right4['image'],
+            #image_sourceBack['counter'] >> bit_bucketBack['counter'],
+            image_sourceBack['left']  >> imshow_leftBack['image'],
+            image_sourceBack['right'] >> imshow_rightBack['image'],
          ]
-
-
+    else:
+        sys.exit("\n Dude select something, you have to either read from file system or select a combination of cameras: -front, -back, or -r are all options \n ...pick one! Oh and then re-run me \n")
 
 plasm = ecto.Plasm()
 plasm.connect(graph)
@@ -218,12 +226,12 @@ plasm.connect(graph)
 # Ros
 ##############################################################################
 
-if options.ip3 and options.ip4:
+if options.frontcam and options.backcam:
     ecto_ros.init(sys.argv, "dslam_ecto_bridge")
-if options.ip3 and not options.ip4:
-    ecto_ros.init(sys.argv, "dslam_ecto_bridge3")
-if options.ip4 and not options.ip3:
-    ecto_ros.init(sys.argv, "dslam_ecto_bridge4")
+if options.frontcam and not options.backcam:
+    ecto_ros.init(sys.argv, "dslam_ecto_bridgeFront")
+if options.backcam and not options.frontcam:
+    ecto_ros.init(sys.argv, "dslam_ecto_bridgeBack")
 #rospy.init_node("dslam_ecto_bridge")
 
 ##############################################################################

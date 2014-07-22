@@ -1,0 +1,9 @@
+#!/bin/bash
+
+if [ $# -lt 1 ]; then
+  echo "Usage: upload_bags <name of bag file>"
+  exit 1
+fi
+
+bag_file=$1
+scp ${bag_file} files@192.168.10.233:shared/control/dslam/bags

@@ -16,12 +16,15 @@
   <license>TODO</license>
 
   <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>dslam_ecto_vision</build_depend> 
+  <build_depend>dslam_ecto_bridge</build_depend>
   <build_depend>ecl_build</build_depend>
   <build_depend>ecl_time</build_depend>
   <build_depend>ecto</build_depend>
   <build_depend>ecto_ros</build_depend>
   <build_depend>opencv2</build_depend>
-  <build_depend>dslam_ecto_vision</build_depend> 
+  <build_depend>rostime</build_depend>
+  <build_depend>sensor_msgs</build_depend>
 
   <run_depend>ecl_build</run_depend>
   <run_depend>ecl_time</run_depend>
@@ -29,6 +32,9 @@
   <run_depend>ecto_ros</run_depend>
   <run_depend>opencv2</run_depend>
   <run_depend>dslam_ecto_vision</run_depend>
+  <run_depend>dslam_ecto_bridge</run_depend>
+  <run_depend>rostime</run_depend>
+  <run_depend>sensor_msgs</run_depend>
 
   <!-- Author tags are optional, mutiple are allowed, one per tag -->
   <!-- Authors do not have to be maintianers, but could be -->
