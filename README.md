@@ -17,5 +17,5 @@ Quickly and easily ROSBAG incoming DSLAM image and /odom feeds.
     * -back : use the back camera pair (left, right). Can be used with or without -front
 
 * To run:
-    * ./dslam_image_capture_bag.py
+    * ./src/dslam_bag/scripts/dslam_image_capture_bag.py
     
